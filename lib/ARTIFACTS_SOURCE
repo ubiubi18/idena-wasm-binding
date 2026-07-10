@@ -1,0 +1,5 @@
+repository=https://github.com/ubiubi18/idena-wasm
+idena_wasm_revision=7e1138959f9f96f59d20efa11f2c27b134067541
+workflow_run=29082016126
+rust_toolchain=1.97.0
+wasmer_revision=1637dea03c0110f7dd800f2d9781193caf820074

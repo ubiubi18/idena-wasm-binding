@@ -1,0 +1,5 @@
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+lib/ARTIFACTS_SOURCE text eol=lf
+lib/SHA256SUMS text eol=lf
