@@ -9,6 +9,11 @@ runtime.
 > Go code. It has no independent binary release. Use the exact revision pinned
 > by the consuming `idena-go` source, not an arbitrary branch snapshot.
 
+The coordinated candidate revision and every native archive checksum are also
+vendored in [`compatibility/stack-lock.json`](compatibility/stack-lock.json).
+The compatibility workflow verifies that this lock, `ARTIFACTS_SOURCE`, and
+`SHA256SUMS` describe one identical artifact set.
+
 ## Artifact provenance
 
 The checked-in archives are built by the pinned `idena-wasm` GitHub workflow.

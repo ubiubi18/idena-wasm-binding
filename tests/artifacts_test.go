@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,17 @@ var requiredArtifacts = map[string]struct{}{
 	"libidena_wasm_linux_aarch64.a": {},
 	"libidena_wasm_linux_amd64.a":   {},
 	"libidena_wasm_windows_amd64.a": {},
+}
+
+type compatibilityLock struct {
+	Components []struct {
+		Name   string `json:"name"`
+		Commit string `json:"commit"`
+	} `json:"components"`
+	Artifacts []struct {
+		Name   string `json:"name"`
+		SHA256 string `json:"sha256"`
+	} `json:"artifacts"`
 }
 
 func TestStaticLibraryArtifactChecksums(t *testing.T) {
@@ -63,6 +75,53 @@ func TestStaticLibraryArtifactSource(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "1.97.0", values["rust_toolchain"])
 	require.Len(t, values, 5)
+}
+
+func TestCompatibilityStackMatchesArtifactProvenance(t *testing.T) {
+	root := repositoryRoot(t)
+	raw, err := os.ReadFile(filepath.Join(root, "compatibility", "stack-lock.json"))
+	require.NoError(t, err)
+	var lock compatibilityLock
+	require.NoError(t, json.Unmarshal(raw, &lock))
+
+	components := make(map[string]string, len(lock.Components))
+	for _, component := range lock.Components {
+		require.NotEmpty(t, component.Name)
+		requireCommitHash(t, component.Commit)
+		_, duplicate := components[component.Name]
+		require.False(t, duplicate, "duplicate component %q", component.Name)
+		components[component.Name] = component.Commit
+	}
+	require.Equal(t, "67ba065fdb02aa07cced2a43a261e481ca5b39d9", components["idena-wasm-binding"])
+
+	sourceRaw, err := os.ReadFile(filepath.Join(root, "lib", "ARTIFACTS_SOURCE"))
+	require.NoError(t, err)
+	source := parseArtifactSource(t, sourceRaw)
+	require.Equal(t, components["idena-wasm"], source["idena_wasm_revision"])
+	require.Equal(t, components["wasmer"], source["wasmer_revision"])
+
+	lockedArtifacts := make(map[string]string, len(lock.Artifacts))
+	for _, artifact := range lock.Artifacts {
+		decoded, err := hex.DecodeString(artifact.SHA256)
+		require.NoError(t, err)
+		require.Len(t, decoded, sha256.Size)
+		_, duplicate := lockedArtifacts[artifact.Name]
+		require.False(t, duplicate, "duplicate locked artifact %q", artifact.Name)
+		lockedArtifacts[artifact.Name] = artifact.SHA256
+	}
+
+	manifest, err := os.Open(filepath.Join(root, "lib", "SHA256SUMS"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, manifest.Close()) })
+	manifestArtifacts := make(map[string]string)
+	scanner := bufio.NewScanner(manifest)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		require.Len(t, fields, 2)
+		manifestArtifacts[fields[1]] = fields[0]
+	}
+	require.NoError(t, scanner.Err())
+	require.Equal(t, lockedArtifacts, manifestArtifacts)
 }
 
 func TestArtifactSourceParserAcceptsCRLF(t *testing.T) {
